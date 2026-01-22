@@ -2,7 +2,7 @@
 
 A lightweight, no-build weather Progressive Web App (PWA) built with vanilla HTML, CSS, and JavaScript. It provides real-time current conditions, forecasts, and an animated radar map for US locations.
 
-[**🔗 Live Demo**](https://eric-lautanen.github.io/simpleweather)
+[**🔗 Live Demo**](https://eric-lautanen.github.io/SimpleWeather/)
 
 ## Features
 * **Instant Weather:** Get current temperature and local forecasts by ZIP code.
