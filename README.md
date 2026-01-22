@@ -18,7 +18,7 @@ A lightweight, no-build weather Progressive Web App (PWA) built with vanilla HTM
 3. Enter a 5-digit US ZIP code to view the weather.
 
 ## Known Issues ⚠️
-* **Radar Switching:** There are currently bugs with the radar source selector. While the UI allows selecting NOAA or OpenWeather, the map logic is currently optimized for RainViewer. A fix to enable seamless switching between sources is coming soon.
+* **Bugs:** Radar source toggles none functional.  CSS highlighting issues for zips and a few other minor tweaks.
 
 ## Credits
 * **Weather Data:** [National Weather Service API](https://www.weather.gov/documentation/services-web-api)
