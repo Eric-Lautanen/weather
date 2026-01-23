@@ -22,6 +22,7 @@
         #menu-toggle{right:1rem;display:none}
         .nav-btn:hover{transform:scale(1.1)}
         .nav-btn:active{transform:scale(0.95)}
+        #unit-toggle { left: 5rem;font-size: 1.2rem;font-weight: bold;}
 
         /* Main container layout using Flexbox */
         #main-container{width:100%;max-width:1400px;margin:0 auto;padding:1.5rem;padding-top:5rem;display:flex;gap:1.5rem;align-items:flex-start}
@@ -265,6 +266,7 @@
 <body>
     <div id="menu-overlay"></div>
     <button id="theme-toggle" class="nav-btn" aria-label="Toggle dark mode" aria-pressed="false">🌙</button>
+    <button id="unit-toggle" class="nav-btn" aria-label="Toggle temperature unit" aria-pressed="false" style="left: 5rem;">°F</button>
     <button id="menu-toggle" class="nav-btn" aria-label="Toggle menu" aria-expanded="false">☰</button>
 
     <div id="main-container">
@@ -359,6 +361,18 @@
         } catch(e) { return defaultVal; }
     }
 
+    function toFahrenheit(celsius) {
+        return (celsius * 9/5) + 32;
+    }
+
+    function toCelsius(fahrenheit) {
+        return (fahrenheit - 32) * 5/9;
+    }
+
+    function formatTemp(temp) {
+        return Math.round(temp) + (state.useCelsius ? '°C' : '°F');
+    }
+
     // Central state object tracking UI and weather data
     const state = {
         currentLocation: getStoredState('currentLocation', defaultLocation),
@@ -370,7 +384,8 @@
         radarInterval: null,
         radarTimes: [],
         weatherRefreshInterval: null,
-        radarSource: localStorage.getItem('radarSource') || 'rainviewer'
+        radarSource: localStorage.getItem('radarSource') || 'rainviewer',
+        useCelsius: localStorage.getItem('tempUnit') === 'celsius'
     };
 
     // Helper to determine if two location objects refer to the same coordinate
@@ -506,6 +521,16 @@
         localStorage.setItem('theme', state.isDark ? 'dark' : 'light');
         updateMapTheme();
     });
+    
+    // Handle temperature switching
+    document.getElementById('unit-toggle').addEventListener('click', () => {
+        state.useCelsius = !state.useCelsius;
+        const unitBtn = document.getElementById('unit-toggle');
+        unitBtn.textContent = state.useCelsius ? '°C' : '°F';
+        unitBtn.setAttribute('aria-label', `Switch to ${state.useCelsius ? 'Fahrenheit' : 'Celsius'}`);
+        localStorage.setItem('tempUnit', state.useCelsius ? 'celsius' : 'fahrenheit');
+        loadWeather();
+    });
 
     // Handle map layer radio button changes
     document.querySelectorAll('input[name="radar-source"]').forEach(radio => {
@@ -572,7 +597,10 @@
     async function loadWeather() {
         try {
             const { lat, lon } = state.currentLocation;
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,surface_pressure&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
+            
+            // Always fetch in both units to have data available
+            const tempUnit = 'fahrenheit'; // Always fetch in F, convert if needed
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,surface_pressure&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${tempUnit}&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
             
             const res = await fetch(url);
             if (!res.ok) throw new Error('Weather API Error');
@@ -580,13 +608,17 @@
 
             // Update DOM with current weather conditions
             const cur = data.current;
-            document.getElementById('current-temp').textContent = `${Math.round(cur.temperature_2m)}°F`;
+            let currentTemp = cur.temperature_2m;
+            if (state.useCelsius) {
+                currentTemp = toCelsius(currentTemp);
+            }
+            
+            document.getElementById('current-temp').textContent = formatTemp(currentTemp);
             document.getElementById('current-desc').textContent = getWeatherDescription(cur.weather_code);
 
-            // Update stats grid
+            // Update stats grid (wind and humidity stay the same)
             document.getElementById('val-wind').textContent = `${Math.round(cur.wind_speed_10m)} mph`;
             document.getElementById('val-humid').textContent = `${cur.relative_humidity_2m}%`;
-            // Math for pressure conversion
             const inHg = (cur.surface_pressure * 0.02953).toFixed(2);
             document.getElementById('val-press').textContent = `${inHg} inHg`;
 
@@ -599,12 +631,20 @@
                 const d = new Date(daily.time[i] + 'T12:00:00'); 
                 const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
                 
+                let maxTemp = daily.temperature_2m_max[i];
+                let minTemp = daily.temperature_2m_min[i];
+                
+                if (state.useCelsius) {
+                    maxTemp = toCelsius(maxTemp);
+                    minTemp = toCelsius(minTemp);
+                }
+                
                 const el = document.createElement('div');
                 el.className = 'forecast-card card';
                 el.innerHTML = `
                     <h3>${dayName}</h3>
-                    <div class="temp">${Math.round(daily.temperature_2m_max[i])}°</div>
-                    <div style="font-size:0.8rem; opacity:0.7">L: ${Math.round(daily.temperature_2m_min[i])}°</div>
+                    <div class="temp">${formatTemp(maxTemp)}</div>
+                    <div style="font-size:0.8rem; opacity:0.7">L: ${formatTemp(minTemp)}</div>
                     <p style="font-size:0.9rem;margin:0.25rem 0 0 0">${getWeatherDescription(daily.weather_code[i])}</p>
                 `;
                 forecastDiv.appendChild(el);
@@ -775,6 +815,7 @@
      */
     document.body.classList.toggle('dark', state.isDark);
     document.getElementById('theme-toggle').textContent = state.isDark ? '☀️' : '🌙';
+    document.getElementById('unit-toggle').textContent = state.useCelsius ? '°C' : '°F';
     const savedRadio = document.getElementById(`radar-${state.radarSource}`);
     if (savedRadio) savedRadio.checked = true;
 
