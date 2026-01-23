@@ -410,6 +410,7 @@
     }
 
     // Build the HTML for the recent locations list in the sidebar
+// Build the HTML for the recent locations list in the sidebar
     function renderRecentLocations() {
         const list = document.getElementById('recent-list');
         list.innerHTML = '';
@@ -423,16 +424,29 @@
             const div = document.createElement('div');
             const isActive = isSameLocation(item, state.currentLocation);
             div.className = 'recent-item' + (isActive ? ' active' : '');
+            div.setAttribute('role', 'listitem');
             
             div.innerHTML = `
                 <div class="recent-info">
                     <div class="recent-zip">${item.name}</div>
                     <div class="recent-city">${item.region || ''}</div>
                 </div>
-                <button class="remove-btn" title="Remove">×</button>
+                <button class="remove-btn" title="Remove ${item.name}" aria-label="Remove ${item.name} from recent locations">×</button>
             `;
             
-            div.querySelector('.recent-info').addEventListener('click', () => selectLocation(item));
+            const infoBtn = div.querySelector('.recent-info');
+            infoBtn.setAttribute('tabindex', '0');
+            infoBtn.setAttribute('role', 'button');
+            infoBtn.setAttribute('aria-label', `Select ${item.name}, ${item.region || ''}`);
+            
+            infoBtn.addEventListener('click', () => selectLocation(item));
+            infoBtn.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectLocation(item);
+                }
+            });
+            
             div.querySelector('.remove-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 state.recentLocations = state.recentLocations.filter(loc => !isSameLocation(loc, item));
@@ -466,11 +480,13 @@
             controlsPanel.classList.add('open');
             overlay.classList.add('open');
             menuToggle.textContent = '✕';
+            menuToggle.setAttribute('aria-expanded', 'true');
             closeMenuBtn.style.display = 'block';
         } else {
             controlsPanel.classList.remove('open');
             overlay.classList.remove('open');
             menuToggle.textContent = '☰';
+            menuToggle.setAttribute('aria-expanded', 'false');
             setTimeout(() => closeMenuBtn.style.display = 'none', 300);
         }
     }
@@ -483,7 +499,10 @@
     document.getElementById('theme-toggle').addEventListener('click', () => {
         state.isDark = !state.isDark;
         document.body.classList.toggle('dark', state.isDark);
-        document.getElementById('theme-toggle').textContent = state.isDark ? '☀️' : '🌙';
+        const themeBtn = document.getElementById('theme-toggle');
+        themeBtn.textContent = state.isDark ? '☀️' : '🌙';
+        themeBtn.setAttribute('aria-pressed', state.isDark ? 'true' : 'false');
+        themeBtn.setAttribute('aria-label', state.isDark ? 'Switch to light mode' : 'Switch to dark mode');
         localStorage.setItem('theme', state.isDark ? 'dark' : 'light');
         updateMapTheme();
     });
