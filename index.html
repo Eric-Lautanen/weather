@@ -369,8 +369,19 @@
         return (fahrenheit - 32) * 5/9;
     }
 
+    function toKph(mph) {
+        return mph * 1.60934;
+    }
+
     function formatTemp(temp) {
-        return Math.round(temp) + (state.useCelsius ? '°C' : '°F');
+        return Math.round(temp) + (state.useMetric ? '°C' : '°F');
+    }
+
+    function formatWind(speedMph) {
+        if (state.useMetric) {
+            return Math.round(toKph(speedMph)) + ' km/h';
+        }
+        return Math.round(speedMph) + ' mph';
     }
 
     // Central state object tracking UI and weather data
@@ -385,7 +396,7 @@
         radarTimes: [],
         weatherRefreshInterval: null,
         radarSource: localStorage.getItem('radarSource') || 'rainviewer',
-        useCelsius: localStorage.getItem('tempUnit') === 'celsius'
+        useMetric: localStorage.getItem('tempUnit') === 'celsius'
     };
 
     // Helper to determine if two location objects refer to the same coordinate
@@ -524,11 +535,11 @@
     
     // Handle temperature switching
     document.getElementById('unit-toggle').addEventListener('click', () => {
-        state.useCelsius = !state.useCelsius;
+        state.useMetric = !state.useMetric;
         const unitBtn = document.getElementById('unit-toggle');
-        unitBtn.textContent = state.useCelsius ? '°C' : '°F';
-        unitBtn.setAttribute('aria-label', `Switch to ${state.useCelsius ? 'Fahrenheit' : 'Celsius'}`);
-        localStorage.setItem('tempUnit', state.useCelsius ? 'celsius' : 'fahrenheit');
+        unitBtn.textContent = state.useMetric ? '°C' : '°F';
+        unitBtn.setAttribute('aria-label', `Switch to ${state.useMetric ? 'Fahrenheit' : 'Celsius'}`);
+        localStorage.setItem('tempUnit', state.useMetric ? 'celsius' : 'fahrenheit');
         loadWeather();
     });
 
@@ -598,8 +609,8 @@
         try {
             const { lat, lon } = state.currentLocation;
             
-            // Always fetch in both units to have data available
-            const tempUnit = 'fahrenheit'; // Always fetch in F, convert if needed
+            // Always fetch in fahrenheit/mph, convert to metric if needed
+            const tempUnit = 'fahrenheit';
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,surface_pressure&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${tempUnit}&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
             
             const res = await fetch(url);
@@ -609,15 +620,15 @@
             // Update DOM with current weather conditions
             const cur = data.current;
             let currentTemp = cur.temperature_2m;
-            if (state.useCelsius) {
+            if (state.useMetric) {
                 currentTemp = toCelsius(currentTemp);
             }
             
             document.getElementById('current-temp').textContent = formatTemp(currentTemp);
             document.getElementById('current-desc').textContent = getWeatherDescription(cur.weather_code);
 
-            // Update stats grid (wind and humidity stay the same)
-            document.getElementById('val-wind').textContent = `${Math.round(cur.wind_speed_10m)} mph`;
+            // Update stats grid - temperature and wind both convert with metric toggle
+            document.getElementById('val-wind').textContent = formatWind(cur.wind_speed_10m);
             document.getElementById('val-humid').textContent = `${cur.relative_humidity_2m}%`;
             const inHg = (cur.surface_pressure * 0.02953).toFixed(2);
             document.getElementById('val-press').textContent = `${inHg} inHg`;
@@ -634,7 +645,7 @@
                 let maxTemp = daily.temperature_2m_max[i];
                 let minTemp = daily.temperature_2m_min[i];
                 
-                if (state.useCelsius) {
+                if (state.useMetric) {
                     maxTemp = toCelsius(maxTemp);
                     minTemp = toCelsius(minTemp);
                 }
@@ -815,7 +826,7 @@
      */
     document.body.classList.toggle('dark', state.isDark);
     document.getElementById('theme-toggle').textContent = state.isDark ? '☀️' : '🌙';
-    document.getElementById('unit-toggle').textContent = state.useCelsius ? '°C' : '°F';
+    document.getElementById('unit-toggle').textContent = state.useMetric ? '°C' : '°F';
     const savedRadio = document.getElementById(`radar-${state.radarSource}`);
     if (savedRadio) savedRadio.checked = true;
 
