@@ -43,13 +43,26 @@
         /* Recent Zips */
         #recent-zips h3{margin:0 0 1rem 0;font-size:1.1rem}
         #recent-list{display:flex;flex-direction:column;gap:0.5rem;max-height:300px;overflow-y:auto}
-        .recent-item{display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background-color:var(--bg-color);border-radius:8px;cursor:pointer}
-        .recent-item:hover{background-color:var(--accent-color);color:white}
+        .recent-item{display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background-color:var(--bg-color);border-radius:8px;cursor:pointer;border-left: 4px solid transparent; transition: all 0.2s;}
+        .recent-item:hover{background-color:rgba(0,0,0,0.05)}
+        
+        /* Active State for Recent Items */
+        .recent-item.active {
+            border-left-color: var(--accent-color);
+            background-color: rgba(0, 123, 255, 0.08);
+        }
+        body.dark .recent-item.active {
+            background-color: rgba(13, 110, 253, 0.15);
+        }
+        body.dark .recent-item:hover {
+            background-color: rgba(255,255,255,0.05);
+        }
+
         .recent-info{flex:1}
         .recent-zip{font-weight:bold}
         .recent-city{font-size:0.8rem;opacity:0.8}
         .remove-btn{background:none;border:none;color:inherit;font-size:1.5rem;padding:0 0.5rem;opacity:0.5;cursor:pointer}
-        .remove-btn:hover{opacity:1}
+        .remove-btn:hover{opacity:1; color: #ff4444;}
 
         /* Radar Selector */
         #radar-source-selector label.section-title{font-weight:600;display:block;margin-bottom:0.75rem}
@@ -139,19 +152,19 @@
             </div>
             
             <div id="radar-source-selector" class="card">
-                <label class="section-title">Radar Source</label>
+                <label class="section-title">Map Layer</label>
                 <div class="radio-options">
                     <label class="radio-option">
                         <input type="radio" id="radar-rainviewer" name="radar-source" value="rainviewer" checked>
-                        <span>RainViewer</span>
+                        <span>RainViewer (Animated)</span>
                     </label>
                     <label class="radio-option">
                         <input type="radio" id="radar-noaa" name="radar-source" value="noaa">
-                        <span>NOAA (Buggy)</span>
+                        <span>NOAA NEXRAD (Static)</span>
                     </label>
                     <label class="radio-option">
-                        <input type="radio" id="radar-openweather" name="radar-source" value="openweather">
-                        <span>OpenWeather (Buggy)</span>
+                        <input type="radio" id="radar-satellite" name="radar-source" value="satellite">
+                        <span>Satellite (Clouds)</span>
                     </label>
                 </div>
             </div>
@@ -255,6 +268,12 @@
             state.recentZips.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'recent-item';
+                
+                // Active class if matches current zip
+                if (item.zip === state.zip) {
+                    div.classList.add('active');
+                }
+
                 div.innerHTML = `
                     <div class="recent-info">
                         <div class="recent-zip">${item.zip}</div>
@@ -267,8 +286,10 @@
                     state.zip = item.zip;
                     localStorage.setItem('zip', state.zip);
                     document.getElementById('zip-input').value = state.zip;
-                    toggleMenu(false); // Close menu on mobile when clicking recent
+                    toggleMenu(false); 
                     loadWeather();
+                    // Re-render to update active state
+                    renderRecentZips();
                 });
                 
                 div.querySelector('.remove-btn').addEventListener('click', (e) => {
@@ -298,9 +319,14 @@
         // Radar Source Handling
         const savedRadarSource = localStorage.getItem('radarSource');
         if (savedRadarSource) {
-            state.radarSource = savedRadarSource;
-            const savedRadio = document.getElementById(`radar-${savedRadarSource}`);
-            if (savedRadio) savedRadio.checked = true;
+            // Check if saved source is still valid (we removed openweather)
+            if (['rainviewer', 'noaa', 'satellite'].includes(savedRadarSource)) {
+                state.radarSource = savedRadarSource;
+                const savedRadio = document.getElementById(`radar-${savedRadarSource}`);
+                if (savedRadio) savedRadio.checked = true;
+            } else {
+                 state.radarSource = 'rainviewer';
+            }
         }
 
         document.querySelectorAll('input[name="radar-source"]').forEach(radio => {
@@ -325,7 +351,7 @@
             if (newZip.length === 5 && /^\d+$/.test(newZip)) {
                 state.zip = newZip;
                 localStorage.setItem('zip', state.zip);
-                toggleMenu(false); // Close menu on submit
+                toggleMenu(false);
                 loadWeather();
             } else {
                 showError('Please enter a valid 5-digit ZIP code.');
@@ -334,7 +360,6 @@
 
         function showError(message) {
             const container = document.getElementById('weather-container');
-            // Remove existing error if any
             const existingError = document.querySelector('.error');
             if (existingError) existingError.remove();
 
@@ -342,7 +367,6 @@
             errorDiv.className = 'error';
             errorDiv.textContent = message;
             
-            // Insert after map
             const mapWrapper = document.getElementById('map-wrapper');
             container.insertBefore(errorDiv, mapWrapper.nextSibling);
             
@@ -426,12 +450,11 @@
                 return;
             }
 
-            // Move zoom control to bottom right so it doesn't conflict with hamburger
             state.map = L.map('map', { zoomControl: false }).setView([lat, lon], 10);
             L.control.zoom({ position: 'bottomright' }).addTo(state.map);
             
-            const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-            const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+            const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
+            const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
             
             baseLayer = state.isDark ? darkLayer : lightLayer;
             baseLayer.addTo(state.map);
@@ -446,24 +469,26 @@
                     state.map.removeLayer(layer);
                 }
             });
-            const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-            const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+            const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
+            const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
             baseLayer = state.isDark ? darkLayer : lightLayer;
             baseLayer.addTo(state.map);
         }
 
-        function updateRadarTimestamp() {
-            if (state.radarTimes.length === 0) return;
-            const currentTime = state.radarTimes[state.currentRadarIndex];
-            const date = new Date(currentTime * 1000);
-            const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            document.getElementById('radar-timestamp').textContent = `Radar: ${timeStr}`;
+        function updateRadarTimestamp(timeStr) {
+            const el = document.getElementById('radar-timestamp');
+            if (timeStr) {
+                el.textContent = timeStr;
+            } else if (state.radarTimes.length > 0) {
+                const currentTime = state.radarTimes[state.currentRadarIndex];
+                const date = new Date(currentTime * 1000);
+                const tStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                el.textContent = `Radar: ${tStr}`;
+            }
         }
 
         async function loadAnimatedRadar() {
-            // Note: Currently only RainViewer is implemented correctly.
-            // NOAA and OpenWeather options are place holders in the UI as per request.
-            
+            // Clean up existing layers
             state.radarLayers.forEach(layer => {
                 if (state.map.hasLayer(layer)) state.map.removeLayer(layer);
             });
@@ -474,50 +499,86 @@
                 state.radarInterval = null;
             }
             
+            const timestampEl = document.getElementById('radar-timestamp');
+            timestampEl.textContent = 'Loading...';
+
             try {
-                const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-                if (!res.ok) throw new Error('Failed to fetch radar');
-                const data = await res.json();
+                // --- CASE 1: RAINVIEWER (Animated) ---
+                if (state.radarSource === 'rainviewer') {
+                    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                    if (!res.ok) throw new Error('Failed to fetch radar');
+                    const data = await res.json();
+                    
+                    const frames = data.radar.past.slice(-10).concat(data.radar.nowcast.slice(0, 2));
+                    
+                    // Color scheme
+                    const currentTempText = document.getElementById('current-temp').textContent;
+                    const tempMatch = currentTempText.match(/(-?\d+)/);
+                    const temp = tempMatch ? parseInt(tempMatch[0]) : 50;
+                    let colorScheme = 1; // Rain
+                    if (temp <= 32) colorScheme = 2; // Snow
+                    else if (temp <= 36) colorScheme = 4; // Mix
+                    
+                    frames.forEach((frame, idx) => {
+                        state.radarTimes.push(frame.time);
+                        const layer = L.tileLayer(
+                            `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`, 
+                            {
+                                transparent: true, opacity: 0, zIndex: 1000 + idx,
+                                tileSize: 256, maxZoom: 18, minZoom: 0
+                            }
+                        );
+                        layer.addTo(state.map);
+                        state.radarLayers.push(layer);
+                    });
+
+                    if (state.radarLayers.length > 0) {
+                        state.radarLayers[0].setOpacity(0.7);
+                        state.currentRadarIndex = 0;
+                        updateRadarTimestamp();
+                    }
+
+                    state.radarInterval = setInterval(() => {
+                        state.radarLayers[state.currentRadarIndex].setOpacity(0);
+                        state.currentRadarIndex = (state.currentRadarIndex + 1) % state.radarLayers.length;
+                        state.radarLayers[state.currentRadarIndex].setOpacity(0.7);
+                        updateRadarTimestamp();
+                    }, 500);
+                } 
                 
-                const frames = data.radar.past.slice(-10).concat(data.radar.nowcast.slice(0, 2));
-                
-                // Color scheme based on current temp (Rain vs Snow)
-                const currentTempText = document.getElementById('current-temp').textContent;
-                const tempMatch = currentTempText.match(/(-?\d+)/);
-                const temp = tempMatch ? parseInt(tempMatch[0]) : 50;
-                let colorScheme = 1; // Rain
-                if (temp <= 32) colorScheme = 2; // Snow
-                else if (temp <= 36) colorScheme = 4; // Mix
-                
-                frames.forEach((frame, idx) => {
-                    state.radarTimes.push(frame.time);
+                // --- CASE 2: NOAA NEXRAD (Static via IEM) ---
+                else if (state.radarSource === 'noaa') {
+                    timestampEl.textContent = 'Radar: NOAA (Latest)';
+                    // N0Q is higher res base reflectivity
                     const layer = L.tileLayer(
-                        `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`, 
+                        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png`,
                         {
-                            transparent: true, opacity: 0, zIndex: 1000 + idx,
-                            tileSize: 256, maxZoom: 18, minZoom: 0
+                            transparent: true, opacity: 0.7, zIndex: 1000,
+                            attribution: 'IEM NEXRAD'
                         }
                     );
                     layer.addTo(state.map);
                     state.radarLayers.push(layer);
-                });
-
-                if (state.radarLayers.length > 0) {
-                    state.radarLayers[0].setOpacity(0.7);
-                    state.currentRadarIndex = 0;
-                    updateRadarTimestamp();
                 }
 
-                state.radarInterval = setInterval(() => {
-                    state.radarLayers[state.currentRadarIndex].setOpacity(0);
-                    state.currentRadarIndex = (state.currentRadarIndex + 1) % state.radarLayers.length;
-                    state.radarLayers[state.currentRadarIndex].setOpacity(0.7);
-                    updateRadarTimestamp();
-                }, 500);
+                // --- CASE 3: SATELLITE (Static via IEM) ---
+                else if (state.radarSource === 'satellite') {
+                    timestampEl.textContent = 'Layer: Satellite (IR)';
+                    // GOES East Infrared
+                    const layer = L.tileLayer(
+                        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-east-ir-4km-900913/{z}/{x}/{y}.png`,
+                        {
+                            transparent: true, opacity: 0.65, zIndex: 1000,
+                            attribution: 'IEM GOES'
+                        }
+                    );
+                    layer.addTo(state.map);
+                    state.radarLayers.push(layer);
+                }
 
             } catch (err) {
                 console.error('Radar error:', err);
-                document.getElementById('radar-timestamp').textContent = 'Radar unavailable';
+                timestampEl.textContent = 'Layer unavailable';
             }
         }
 
