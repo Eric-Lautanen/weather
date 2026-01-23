@@ -532,6 +532,7 @@
 
             if (!data.results || data.results.length === 0) {
                 showError('Location not found.');
+                inputEl.value = '';
             } else {
                 const loc = data.results[0];
                 const newLoc = {
@@ -547,6 +548,7 @@
         } catch (err) {
             console.error(err);
             showError('Search failed.');
+            inputEl.value = '';
         } finally {
             btn.disabled = false; btn.textContent = 'Go';
         }
