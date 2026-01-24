@@ -10,7 +10,7 @@ A lightweight, no-build weather Progressive Web App (PWA) built with vanilla HTM
 
 * **Global Coverage:** Search any city or ZIP code worldwide for instant weather data
 * **Current Conditions:** Real-time temperature, weather description, wind speed, humidity, and pressure
-* **6-Day Forecast:** Daily high/low temperatures with weather conditions
+* **7-Day Forecast:** Daily high/low temperatures with weather conditions
 * **Interactive Weather Map:** Animated precipitation radar with multiple visualization layers:
   - Live radar (rain/snow/mixed precipitation)
   - Satellite cloud imagery
@@ -49,6 +49,16 @@ No installation, no build process, no dependencies beyond the browser itself.
 * **Vanilla JavaScript** - No frameworks, just ES6+
 * **Leaflet.js** - Interactive mapping library
 * **LocalStorage API** - Client-side data persistence
+
+---
+
+## Development
+
+This project was developed with assistance from AI coding assistants:
+
+* **[Claude](https://www.anthropic.com/claude)** by Anthropic - Code generation and architecture guidance
+* **[Gemini](https://gemini.google.com)** by Google - Feature development and problem-solving
+* **[Grok](https://grok.x.ai)** by xAI - Code optimization and debugging support
 
 ---
 
