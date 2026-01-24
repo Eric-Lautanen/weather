@@ -10,7 +10,7 @@ A lightweight, no-build weather Progressive Web App (PWA) built with vanilla HTM
 
 * **Global Coverage:** Search any city or ZIP code worldwide for instant weather data
 * **Current Conditions:** Real-time temperature, weather description, wind speed, humidity, and pressure
-* **7-Day Forecast:** Daily high/low temperatures with weather conditions
+* **6-Day Forecast:** Daily high/low temperatures with weather conditions
 * **Interactive Weather Map:** Animated precipitation radar with multiple visualization layers:
   - Live radar (rain/snow/mixed precipitation)
   - Satellite cloud imagery
