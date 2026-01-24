@@ -89,6 +89,9 @@
         body.dark .forecast-card {background-color: #2c2c2c;border: 1px solid #3d3d3d;color: #ffffff;box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);}
         body.dark .forecast-card h3,
         body.dark .forecast-card p { color: rgba(255, 255, 255, 0.8) !important;}
+        #locate-btn{padding:0.5rem 0.75rem;font-size:1.2rem;line-height:1}
+        #locate-btn:hover{filter:brightness(110%)}
+        #locate-btn:active{transform:scale(0.95)}
         
         /* Global status and error states */
         .error{background-color:#ff4444;color:white;padding:1rem;border-radius:8px;margin-bottom:1rem;text-align:center}
@@ -275,7 +278,8 @@
         <div id="controls-panel" role="complementary" aria-label="Location controls">
             <div id="recent-zips" class="card">
                 <form id="zip-form" role="search">
-                    <input type="text" id="location-input" placeholder="City or Zip (Global)" required aria-label="Search for a city or zip code">
+                    <input type="text" id="location-input" placeholder="City or Zip" required aria-label="Search for a city or zip code">
+                    <button type="button" id="locate-btn" class="action-btn" title="Use my location" aria-label="Use my location">📍</button>
                     <button type="submit" id="set-zip-btn" class="action-btn">Go</button>
                 </form>
                 <h3>Recent Locations</h3>
@@ -602,6 +606,48 @@
         }
     });
 
+    // IP-based geolocation button handler
+    document.getElementById('locate-btn').addEventListener('click', async () => {
+        const locateBtn = document.getElementById('locate-btn');
+        const originalText = locateBtn.textContent;
+        
+        locateBtn.disabled = true;
+        locateBtn.textContent = '⏳';
+        
+        try {
+            // Try ipify for IP first, then ip-api.com for geolocation
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            
+            // Now get location data from ip-api.com (free, no key needed)
+            const geoRes = await fetch(`http://ip-api.com/json/${ipData.ip}`);
+            if (!geoRes.ok) throw new Error('Geolocation failed');
+            const geoData = await geoRes.json();
+            
+            if (geoData.status !== 'success' || !geoData.lat || !geoData.lon) {
+                throw new Error('Could not determine location');
+            }
+            
+            // Create location object from geo data
+            const newLoc = {
+                name: geoData.city || 'Current Location',
+                lat: geoData.lat,
+                lon: geoData.lon,
+                region: geoData.regionName ? `${geoData.regionName}, ${geoData.country}` : geoData.country
+            };
+            
+            addRecentLocation(newLoc);
+            selectLocation(newLoc);
+            
+        } catch (err) {
+            console.error(err);
+            showError('Could not determine your location. Please enter manually.');
+        } finally {
+            locateBtn.disabled = false;
+            locateBtn.textContent = originalText;
+        }
+    });
+
     // Display temporary error messages to the user
     function showError(msg) {
         const existing = document.querySelector('.error');
@@ -836,6 +882,35 @@
     /**
      * Initial Application Boot
      */
+
+    // Swipe to close menu on mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+
+    controlsPanel.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, false);
+
+    controlsPanel.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+        const swipeThreshold = 50;
+        const swipeDistanceX = touchEndX - touchStartX;
+        const swipeDistanceY = Math.abs(touchEndY - touchStartY);
+        
+        if (swipeDistanceX > swipeThreshold && swipeDistanceY < swipeThreshold * 2) {
+            if (controlsPanel.classList.contains('open')) {
+                toggleMenu(false);
+            }
+        }
+    }
     document.body.classList.toggle('dark', state.isDark);
     document.getElementById('theme-toggle').textContent = state.isDark ? '☀️' : '🌙';
     document.getElementById('unit-toggle').textContent = state.useMetric ? '°C' : '°F';
