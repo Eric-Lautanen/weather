@@ -1,4 +1,4 @@
-# Simple Weather PWA 🌦️
+# Weather PWA 🌦️
 
 A lightweight, no-build weather Progressive Web App (PWA) built with vanilla HTML, CSS, and JavaScript. Get current conditions, 6-day forecasts, and animated weather radar for any location worldwide.
 
