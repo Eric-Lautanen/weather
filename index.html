@@ -407,7 +407,8 @@
         radarTimes: [],
         weatherRefreshInterval: null,
         radarSource: localStorage.getItem('radarSource') || 'rainviewer',
-        useMetric: localStorage.getItem('tempUnit') === 'celsius'
+        useMetric: localStorage.getItem('tempUnit') === 'celsius',
+        pendingTimeouts: []
     };
 
     // Helper to determine if two location objects refer to the same coordinate
@@ -668,8 +669,18 @@
     /**
      * Weather Data Fetching from Open-Meteo
      */
+    let loadWeatherTimeout = null;
+    let isLoadingWeather = false;
+    
     async function loadWeather() {
+        // Debounce: prevent multiple simultaneous calls
+        if (isLoadingWeather) {
+            console.log('Weather load already in progress, skipping...');
+            return;
+        }
+        
         try {
+            isLoadingWeather = true;
             const { lat, lon } = state.currentLocation;
             
             // Always fetch in fahrenheit/mph, convert to metric if needed
@@ -748,6 +759,8 @@
         } catch (err) {
             console.error(err);
             showError('Could not load weather data.');
+        } finally {
+            isLoadingWeather = false;
         }
     }
 
@@ -756,10 +769,25 @@
      */
     function createBaseLayer() {
         // Switch between dark tiles and standard OSM tiles based on state
+        const tileOptions = {
+            maxNativeZoom: 18,
+            maxZoom: 19,
+            keepBuffer: 2,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            updateInterval: 200
+        };
+        
         if (state.isDark) {
-            return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
+            return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+                attribution: '&copy; CartoDB',
+                ...tileOptions
+            });
         } else {
-            return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
+            return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                attribution: '&copy; OpenStreetMap',
+                ...tileOptions
+            });
         }
     }
 
@@ -771,8 +799,9 @@
             return;
         }
 
-        state.map = L.map('map', { zoomControl: false, maxZoom: 9 }).setView([lat, lon], 7);
-        L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+        state.map = L.map('map', { zoomControl: false, maxZoom: 7 }).setView([lat, lon], 7);
+        const zoomControl = L.control.zoom({ position: 'bottomright' });
+        zoomControl.addTo(state.map);
         
         state.baseLayer = createBaseLayer();
         state.baseLayer.addTo(state.map);
@@ -791,14 +820,44 @@
 
     // Stop animation and remove existing overlays
     function clearLayers() {
-        state.radarLayers.forEach(l => state.map.removeLayer(l));
+        // Clear interval first to prevent memory leaks
+        if (state.radarInterval) {
+            clearInterval(state.radarInterval);
+            state.radarInterval = null;
+        }
+        
+        // Clear any pending timeouts to prevent memory leaks
+        if (state.pendingTimeouts) {
+            state.pendingTimeouts.forEach(timeout => clearTimeout(timeout));
+            state.pendingTimeouts = [];
+        }
+        
+        // Properly remove layers and clean up
+        state.radarLayers.forEach(l => {
+            if (state.map && state.map.hasLayer(l)) {
+                state.map.removeLayer(l);
+            }
+            // Remove tile layer to free memory
+            if (l.remove) {
+                l.remove();
+            }
+        });
+        
         state.radarLayers = [];
         state.radarTimes = [];
-        if (state.radarInterval) clearInterval(state.radarInterval);
     }
 
     // Fetch and display selected weather/imagery layers
+    let isLoadingLayers = false;
+    
     async function updateMapLayers() {
+        // Prevent multiple simultaneous layer loads
+        if (isLoadingLayers) {
+            console.log('Layer load already in progress, skipping...');
+            return;
+        }
+        
+        isLoadingLayers = true;
         clearLayers();
         updateMapTheme();
 
@@ -817,57 +876,80 @@
                 if (state.radarSource === 'satellite') {
                     colorScheme = 0; 
                     if (data.satellite && data.satellite.infrared) {
-                        frames = data.satellite.infrared;
+                        frames = data.satellite.infrared.slice(-8);
                     } else {
                         throw new Error('Satellite data missing');
                     }
                 } else {
                     // Radar mode - use color scheme 4 for better precipitation visibility
                     if (data.radar && data.radar.past && data.radar.nowcast) {
-                        frames = [...data.radar.past.slice(-3), ...data.radar.nowcast.slice(0, 2)];
+                        frames = [...data.radar.past.slice(-6), ...data.radar.nowcast.slice(0, 6)];
                     } else {
                         throw new Error('Radar data missing');
                     }
                 }
 
                 // Create tiled layers for each timeframe in the animation
+                let loadDelay = 0;
+                state.pendingTimeouts = []; // Initialize timeout tracking
+                
                 frames.forEach((f, i) => {
                     state.radarTimes.push(f.time);
-                    const l = L.tileLayer(`https://tilecache.rainviewer.com${f.path}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`, {
-                        opacity: 0, 
-                        zIndex: 1000 + i, 
-                        tileSize: 256,
-                        className: 'radar-layer',
-                        updateWhenIdle: false
-                    });
-                    l.addTo(state.map);
-                    state.radarLayers.push(l);
-                });
-
-                // Cycle through frames to create animation effect
-                let idx = 0;
-                const showFrame = () => {
-                    state.radarLayers.forEach(l => l.setOpacity(0));
-                    if(state.radarLayers[idx]) state.radarLayers[idx].setOpacity(state.radarSource === 'satellite' ? 0.75 : 0.7);
                     
-                    if(state.radarTimes[idx]) {
-                        const d = new Date(state.radarTimes[idx] * 1000);
-                        ts.textContent = `${state.radarSource === 'satellite' ? 'Cloud' : 'Radar'}: ${d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
-                    }
-                    idx = (idx + 1) % state.radarLayers.length;
-                };
-                if (state.radarLayers.length) {
-                    showFrame();
-                    state.radarInterval = setInterval(showFrame, 500);
-                } else {
-                    ts.textContent = 'Data Unavailable';
-                }
+                    // Add progressive delay to prevent 429 errors
+                    const timeoutId = setTimeout(() => {
+                        const l = L.tileLayer(`https://tilecache.rainviewer.com${f.path}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`, {
+                            opacity: 0, 
+                            zIndex: 1000 + i, 
+                            tileSize: 256,
+                            className: 'radar-layer',
+                            updateWhenIdle: true,
+                            updateWhenZooming: false,
+                            keepBuffer: 1,
+                            maxNativeZoom: 18
+                        });
+                        l.addTo(state.map);
+                        state.radarLayers.push(l);
+                        
+                        // Start animation only after all layers are loaded
+                        if (i === frames.length - 1) {
+                            const animStartTimeout = setTimeout(() => {
+                                if (state.radarLayers.length) {
+                                    let idx = 0;
+                                    const showFrame = () => {
+                                        state.radarLayers.forEach(l => l.setOpacity(0));
+                                        if(state.radarLayers[idx]) state.radarLayers[idx].setOpacity(state.radarSource === 'satellite' ? 0.75 : 0.7);
+                                        
+                                        if(state.radarTimes[idx]) {
+                                            const d = new Date(state.radarTimes[idx] * 1000);
+                                            ts.textContent = `${state.radarSource === 'satellite' ? 'Cloud' : 'Radar'}: ${d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
+                                        }
+                                        idx = (idx + 1) % state.radarLayers.length;
+                                    };
+                                    showFrame();
+                                    state.radarInterval = setInterval(showFrame, 500);
+                                } else {
+                                    ts.textContent = 'Data Unavailable';
+                                }
+                            }, 100);
+                            state.pendingTimeouts.push(animStartTimeout);
+                        }
+                    }, loadDelay);
+                    
+                    state.pendingTimeouts.push(timeoutId);
+                    loadDelay += 150; // 150ms delay between each layer load (1.8s total for 12 frames)
+                });
             } else if (state.radarSource === 'topography') {
                 // Static Topographic layer
                 ts.textContent = 'Layer: OpenTopoMap';
                 const l = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                    opacity: 0.7, zIndex: 1000,
-                    attribution: 'OpenTopoMap'
+                    opacity: 0.7, 
+                    zIndex: 1000,
+                    attribution: 'OpenTopoMap',
+                    maxNativeZoom: 17,
+                    maxZoom: 19,
+                    updateWhenIdle: true,
+                    keepBuffer: 2
                 });
                 l.addTo(state.map);
                 state.radarLayers.push(l);
@@ -876,8 +958,13 @@
                 // Static Esri Satellite imagery
                 ts.textContent = 'Layer: Esri World Imagery';
                 const l = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                    opacity: 1, zIndex: 1000,
-                    attribution: 'Esri'
+                    opacity: 1, 
+                    zIndex: 1000,
+                    attribution: 'Esri',
+                    maxNativeZoom: 18,
+                    maxZoom: 19,
+                    updateWhenIdle: true,
+                    keepBuffer: 2
                 });
                 l.addTo(state.map);
                 state.radarLayers.push(l);
@@ -886,8 +973,13 @@
                 // Static NASA Night Lights layer
                 ts.textContent = 'Layer: NASA Earth at Night';
                 const l = L.tileLayer('https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg', {
-                    opacity: 0.9, zIndex: 1000,
-                    attribution: 'NASA GIBS'
+                    opacity: 0.9, 
+                    zIndex: 1000,
+                    attribution: 'NASA GIBS',
+                    maxNativeZoom: 8,
+                    maxZoom: 19,
+                    updateWhenIdle: true,
+                    keepBuffer: 2
                 });
                 l.addTo(state.map);
                 state.radarLayers.push(l);
@@ -895,6 +987,8 @@
         } catch (e) {
             console.error(e);
             ts.textContent = 'Layer Unavailable';
+        } finally {
+            isLoadingLayers = false;
         }
     }
 
@@ -938,6 +1032,17 @@
 
     renderRecentLocations();
     loadWeather();
+    
+    // Cleanup on page unload to prevent memory leaks
+    window.addEventListener('beforeunload', () => {
+        clearLayers();
+        if (state.weatherRefreshInterval) {
+            clearInterval(state.weatherRefreshInterval);
+        }
+        if (state.map) {
+            state.map.remove();
+        }
+    });
 </script>
 </body>
 </html>
