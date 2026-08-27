@@ -12,6 +12,8 @@
         :root{--bg-color:#ffffff;--text-color:#000000;--accent-color:#007bff;--card-bg:#f8f9fa;--shadow:0 4px 6px rgba(0,0,0,0.1);--overlay-bg:rgba(255,255,255,0.95)}
         /* Dark mode overrides for CSS variables */
         body.dark{--bg-color:#121212;--text-color:#ffffff;--accent-color:#0d6efd;--card-bg:#1e1e1e;--shadow:0 4px 6px rgba(0,0,0,0.2);--overlay-bg:rgba(30,30,30,0.95)}
+        /* Dark theme map: reuse OSM tiles with CSS filter instead of Carto (requires API key) */
+        body.dark .leaflet-tile-pane{filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)}
         
         /* Basic reset to ensure consistent sizing across browsers */
         *{box-sizing:border-box}
@@ -769,7 +771,7 @@
      * Map Rendering and Layer logic
      */
     function createBaseLayer() {
-        // Switch between dark tiles and standard OSM tiles based on state
+        // Use OSM for both themes; dark mode applied via CSS filter (Carto requires API key now)
         const tileOptions = {
             maxNativeZoom: 18,
             maxZoom: 19,
@@ -779,17 +781,10 @@
             updateInterval: 200
         };
         
-        if (state.isDark) {
-            return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
-                attribution: '&copy; CartoDB',
-                ...tileOptions
-            });
-        } else {
-            return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-                attribution: '&copy; OpenStreetMap',
-                ...tileOptions
-            });
-        }
+        return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            attribution: '&copy; OpenStreetMap',
+            ...tileOptions
+        });
     }
 
     // Initialize or update the Leaflet map instance
