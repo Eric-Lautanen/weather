@@ -12,8 +12,11 @@
         :root{--bg-color:#ffffff;--text-color:#000000;--accent-color:#007bff;--card-bg:#f8f9fa;--shadow:0 4px 6px rgba(0,0,0,0.1);--overlay-bg:rgba(255,255,255,0.95)}
         /* Dark mode overrides for CSS variables */
         body.dark{--bg-color:#121212;--text-color:#ffffff;--accent-color:#0d6efd;--card-bg:#1e1e1e;--shadow:0 4px 6px rgba(0,0,0,0.2);--overlay-bg:rgba(30,30,30,0.95)}
-        /* Dark theme map: reuse OSM tiles with CSS filter instead of Carto (requires API key) */
-        body.dark .leaflet-tile-pane{filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)}
+        /* Dark theme map: reuse OSM tiles with CSS filter instead of Carto (requires API key) - closest to Carto Dark Matter, base tiles only */
+        body.dark .osm-base-tiles{filter:invert(100%) hue-rotate(180deg) brightness(82%) contrast(90%) grayscale(1)}
+        body.dark .leaflet-container{background:#121212}
+        /* Ensure radar/cloud overlays keep original provider colors */
+        body.dark .radar-layer{filter:none !important}
         
         /* Basic reset to ensure consistent sizing across browsers */
         *{box-sizing:border-box}
@@ -783,6 +786,7 @@
         
         return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
             attribution: '&copy; OpenStreetMap',
+            className: 'osm-base-tiles',
             ...tileOptions
         });
     }
